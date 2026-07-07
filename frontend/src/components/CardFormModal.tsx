@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { AcceptanceCriterionItem, BoardList, TaskIssueType, TaskPriority, TaskStatus, WorkspaceMember } from "../types";
+import { statusForListId } from "../entities/boardWorkflow";
 import { CardFields } from "./CardFields";
 import { Modal } from "./ui/Modal";
 import { btnPrimary, btnSecondary, inputClass, labelClass } from "./ui/styles";
@@ -45,7 +46,7 @@ export function CardFormModal({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [issueType, setIssueType] = useState<TaskIssueType>("task");
-  const [status, setStatus] = useState<TaskStatus>("todo");
+  const [status, setStatus] = useState<TaskStatus>("backlog");
   const [priority, setPriority] = useState<TaskPriority | "">("");
   const [labels, setLabels] = useState<string[]>([]);
   const [acceptanceCriteria, setAcceptanceCriteria] = useState<AcceptanceCriterionItem[]>([]);
@@ -58,7 +59,7 @@ export function CardFormModal({
       setTitle("");
       setDescription("");
       setIssueType("task");
-      setStatus("todo");
+      setStatus(statusForListId(listId, lists));
       setPriority("");
       setLabels([]);
       setAcceptanceCriteria([]);
@@ -66,7 +67,7 @@ export function CardFormModal({
       setAssigneeId("");
       setErrors({});
     }
-  }, [open]);
+  }, [open, listId, lists]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,7 +101,11 @@ export function CardFormModal({
             <label className={labelClass}>List</label>
             <select
               value={listId}
-              onChange={(e) => onListChange?.(e.target.value)}
+              onChange={(e) => {
+                const newListId = e.target.value;
+                onListChange?.(newListId);
+                setStatus(statusForListId(newListId, lists));
+              }}
               className={inputClass}
             >
               {lists.map((list) => (

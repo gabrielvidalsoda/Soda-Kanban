@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_user
+from app.constants.board_workflow import status_for_list_name
 from app.db.models import BoardList, Card, NotificationEventType, User
 from app.db.session import get_db
 from app.schemas import CardCreate, CardMove, CardRead, CardUpdate
@@ -18,11 +19,16 @@ from app.services.permissions import get_card_with_board, require_board_write
 router = APIRouter(tags=["cards"])
 
 
-async def _get_board_id_for_list(db: AsyncSession, list_id: uuid.UUID) -> uuid.UUID:
+async def _get_board_list(db: AsyncSession, list_id: uuid.UUID) -> BoardList:
     result = await db.execute(select(BoardList).where(BoardList.id == list_id))
     board_list = result.scalar_one_or_none()
     if not board_list:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="List not found")
+    return board_list
+
+
+async def _get_board_id_for_list(db: AsyncSession, list_id: uuid.UUID) -> uuid.UUID:
+    board_list = await _get_board_list(db, list_id)
     return board_list.board_id
 
 
@@ -44,7 +50,8 @@ async def create_card(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> CardRead:
-    board_id = await _get_board_id_for_list(db, list_id)
+    board_list = await _get_board_list(db, list_id)
+    board_id = board_list.board_id
     await require_board_write(db, board_id, user)
     if payload.position is None:
         count = await db.execute(
@@ -55,6 +62,7 @@ async def create_card(
         position = payload.position
 
     criteria = [item.model_dump() for item in payload.acceptance_criteria]
+    card_status = status_for_list_name(board_list.name) or payload.status
     card = Card(
         list_id=list_id,
         title=payload.title,
@@ -63,7 +71,7 @@ async def create_card(
         due_date=payload.due_date,
         position=position,
         issue_type=payload.issue_type,
-        status=payload.status,
+        status=card_status,
         priority=payload.priority,
         labels=payload.labels,
         acceptance_criteria=criteria,
@@ -198,6 +206,9 @@ async def move_card(
 
     card.list_id = payload.list_id
     card.position = payload.position
+    mapped_status = status_for_list_name(target_list.name)
+    if mapped_status is not None:
+        card.status = mapped_status
     await publish_board_event(
         str(board_id),
         {

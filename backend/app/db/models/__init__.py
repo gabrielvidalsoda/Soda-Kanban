@@ -41,10 +41,12 @@ class TaskIssueType(str, enum.Enum):
 
 
 class TaskStatus(str, enum.Enum):
-    TODO = "todo"
-    IN_PROGRESS = "in_progress"
-    DONE = "done"
+    BACKLOG = "backlog"
     BLOCKED = "blocked"
+    IN_PROGRESS = "in_progress"
+    IN_REVIEW = "in_review"
+    QA = "qa"
+    DONE = "done"
 
 
 class TaskPriority(str, enum.Enum):
@@ -200,7 +202,7 @@ class Card(Base):
         _pg_enum(TaskIssueType, "task_issue_type"), default=TaskIssueType.TASK
     )
     status: Mapped[TaskStatus] = mapped_column(
-        _pg_enum(TaskStatus, "task_status"), default=TaskStatus.TODO
+        _pg_enum(TaskStatus, "task_status"), default=TaskStatus.BACKLOG
     )
     priority: Mapped[TaskPriority | None] = mapped_column(
         _pg_enum(TaskPriority, "task_priority"), nullable=True

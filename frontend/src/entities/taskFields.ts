@@ -1,5 +1,5 @@
 export type TaskIssueType = "task" | "bug" | "story";
-export type TaskStatus = "todo" | "in_progress" | "done" | "blocked";
+export type TaskStatus = "backlog" | "blocked" | "in_progress" | "in_review" | "qa" | "done";
 export type TaskPriority = "low" | "medium" | "high";
 
 export interface AcceptanceCriterionItem {
@@ -21,10 +21,12 @@ export const TASK_ISSUE_TYPE_OPTIONS: { value: TaskIssueType; label: string }[] 
 ];
 
 export const TASK_STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
-  { value: "todo", label: "To do" },
-  { value: "in_progress", label: "In progress" },
-  { value: "done", label: "Done" },
+  { value: "backlog", label: "Backlog" },
   { value: "blocked", label: "Blocked" },
+  { value: "in_progress", label: "In progress" },
+  { value: "in_review", label: "In review" },
+  { value: "qa", label: "QA" },
+  { value: "done", label: "Done" },
 ];
 
 export const TASK_PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [

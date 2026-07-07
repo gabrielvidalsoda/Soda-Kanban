@@ -25,7 +25,7 @@ export function CardDetailModal({ card, boardCards, onClose, members }: CardDeta
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [issueType, setIssueType] = useState<TaskIssueType>("task");
-  const [status, setStatus] = useState<TaskStatus>("todo");
+  const [status, setStatus] = useState<TaskStatus>("backlog");
   const [priority, setPriority] = useState<TaskPriority | "">("");
   const [labels, setLabels] = useState<string[]>([]);
   const [acceptanceCriteria, setAcceptanceCriteria] = useState<AcceptanceCriterionItem[]>([]);

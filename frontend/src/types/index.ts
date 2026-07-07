@@ -1,5 +1,5 @@
 export type TaskIssueType = "task" | "bug" | "story";
-export type TaskStatus = "todo" | "in_progress" | "done" | "blocked";
+export type TaskStatus = "backlog" | "blocked" | "in_progress" | "in_review" | "qa" | "done";
 export type TaskPriority = "low" | "medium" | "high";
 
 export interface AcceptanceCriterionItem {
@@ -64,7 +64,7 @@ export interface Card {
   title: string;
   description: string | null;
   issue_type: "task" | "bug" | "story";
-  status: "todo" | "in_progress" | "done" | "blocked";
+  status: "backlog" | "blocked" | "in_progress" | "in_review" | "qa" | "done";
   priority: "low" | "medium" | "high" | null;
   labels: string[];
   acceptance_criteria: { text: string; done: boolean }[];

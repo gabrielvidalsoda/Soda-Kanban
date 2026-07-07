@@ -150,7 +150,7 @@ class CardCreate(BaseModel):
     due_date: date | None = None
     position: int | None = None
     issue_type: TaskIssueType = TaskIssueType.TASK
-    status: TaskStatus = TaskStatus.TODO
+    status: TaskStatus = TaskStatus.BACKLOG
     priority: TaskPriority | None = None
     labels: list[str] = Field(default_factory=list)
     acceptance_criteria: list[AcceptanceCriterionItem] = Field(default_factory=list)

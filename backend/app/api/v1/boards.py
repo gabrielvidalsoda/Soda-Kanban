@@ -18,6 +18,7 @@ from app.schemas import (
     BoardUpdate,
     ListRead,
 )
+from app.constants.board_workflow import DEFAULT_BOARD_LISTS
 from app.services.card_dependencies import load_dependency_ids_map
 from app.services.cards import build_card_read
 from app.services.permissions import (
@@ -69,7 +70,7 @@ async def create_board(
             role=BoardRole.ADMIN,
         )
     )
-    for i, name in enumerate(["To Do", "In Progress", "Done"]):
+    for i, (name, _status) in enumerate(DEFAULT_BOARD_LISTS):
         db.add(BoardList(board_id=board.id, name=name, position=i))
     return board
 
