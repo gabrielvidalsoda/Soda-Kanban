@@ -3,7 +3,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
-from app.db.models import BoardRole, BoardVisibility, NotificationEventType, WorkspaceRole
+from app.db.models import BoardRole, BoardVisibility, NotificationEventType, TaskIssueType, TaskPriority, TaskStatus, WorkspaceRole
 
 
 class UserRead(BaseModel):
@@ -138,12 +138,23 @@ class ListRead(BaseModel):
     position: int
 
 
+class AcceptanceCriterionItem(BaseModel):
+    text: str
+    done: bool = False
+
+
 class CardCreate(BaseModel):
     title: str = Field(min_length=1, max_length=500)
-    description: str = Field(min_length=1)
+    description: str | None = None
     assignee_id: uuid.UUID | None = None
     due_date: date | None = None
     position: int | None = None
+    issue_type: TaskIssueType = TaskIssueType.TASK
+    status: TaskStatus = TaskStatus.TODO
+    priority: TaskPriority | None = None
+    labels: list[str] = Field(default_factory=list)
+    acceptance_criteria: list[AcceptanceCriterionItem] = Field(default_factory=list)
+    dependency_ids: list[uuid.UUID] = Field(default_factory=list)
 
     @field_validator("title")
     @classmethod
@@ -154,10 +165,11 @@ class CardCreate(BaseModel):
 
     @field_validator("description")
     @classmethod
-    def description_not_blank(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("Description is required")
-        return v.strip()
+    def description_optional(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        stripped = v.strip()
+        return stripped or None
 
     @field_validator("due_date")
     @classmethod
@@ -174,6 +186,12 @@ class CardUpdate(BaseModel):
     due_date: date | None = None
     list_id: uuid.UUID | None = None
     position: int | None = None
+    issue_type: TaskIssueType | None = None
+    status: TaskStatus | None = None
+    priority: TaskPriority | None = None
+    labels: list[str] | None = None
+    acceptance_criteria: list[AcceptanceCriterionItem] | None = None
+    dependency_ids: list[uuid.UUID] | None = None
 
     @field_validator("title")
     @classmethod
@@ -184,10 +202,11 @@ class CardUpdate(BaseModel):
 
     @field_validator("description")
     @classmethod
-    def description_not_blank(cls, v: str | None) -> str | None:
-        if v is not None and not v.strip():
-            raise ValueError("Description is required")
-        return v.strip() if v is not None else v
+    def description_optional(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        stripped = v.strip()
+        return stripped or None
 
     @field_validator("due_date")
     @classmethod
@@ -207,11 +226,18 @@ class CardRead(BaseModel):
 
     id: uuid.UUID
     list_id: uuid.UUID
+    task_code: str | None
     title: str
     description: str | None
+    issue_type: TaskIssueType
+    status: TaskStatus
+    priority: TaskPriority | None
+    labels: list[str]
+    acceptance_criteria: list[AcceptanceCriterionItem]
     assignee_id: uuid.UUID | None
     due_date: date | None
     position: int
+    dependency_ids: list[uuid.UUID] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 

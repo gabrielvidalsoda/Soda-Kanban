@@ -25,11 +25,7 @@ export function validateCardForm(values: CardFormValues): CardFormErrors {
   const errors: CardFormErrors = {};
 
   if (!values.title.trim()) {
-    errors.title = "Title is required";
-  }
-
-  if (!values.description.trim()) {
-    errors.description = "Description is required";
+    errors.title = "Summary is required";
   }
 
   if (values.due_date && isPastDate(values.due_date)) {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Card, WorkspaceMember } from "../types";
+import type { AcceptanceCriterionItem, Card, TaskIssueType, TaskPriority, TaskStatus, WorkspaceMember } from "../types";
 import { boardApi } from "../api/client";
 import { CardFields } from "./CardFields";
 import { CardAttachments } from "./CardAttachments";
@@ -15,14 +15,21 @@ import {
 
 interface CardDetailModalProps {
   card: Card | null;
+  boardCards: Card[];
   onClose: () => void;
   members: WorkspaceMember[];
 }
 
-export function CardDetailModal({ card, onClose, members }: CardDetailModalProps) {
+export function CardDetailModal({ card, boardCards, onClose, members }: CardDetailModalProps) {
   const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [issueType, setIssueType] = useState<TaskIssueType>("task");
+  const [status, setStatus] = useState<TaskStatus>("todo");
+  const [priority, setPriority] = useState<TaskPriority | "">("");
+  const [labels, setLabels] = useState<string[]>([]);
+  const [acceptanceCriteria, setAcceptanceCriteria] = useState<AcceptanceCriterionItem[]>([]);
+  const [dependencyIds, setDependencyIds] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
   const [comment, setComment] = useState("");
@@ -33,6 +40,12 @@ export function CardDetailModal({ card, onClose, members }: CardDetailModalProps
     if (card) {
       setTitle(card.title);
       setDescription(card.description ?? "");
+      setIssueType(card.issue_type);
+      setStatus(card.status);
+      setPriority(card.priority ?? "");
+      setLabels(card.labels ?? []);
+      setAcceptanceCriteria(card.acceptance_criteria ?? []);
+      setDependencyIds(card.dependency_ids ?? []);
       setDueDate(card.due_date ? card.due_date.slice(0, 10) : "");
       setAssigneeId(card.assignee_id ?? "");
       setErrors({});
@@ -49,7 +62,13 @@ export function CardDetailModal({ card, onClose, members }: CardDetailModalProps
     mutationFn: () =>
       boardApi.updateCard(card!.id, {
         title: title.trim(),
-        description: description.trim(),
+        description: description.trim() || null,
+        issue_type: issueType,
+        status,
+        priority: priority || null,
+        labels,
+        acceptance_criteria: acceptanceCriteria.filter((item) => item.text.trim()),
+        dependency_ids: dependencyIds,
         due_date: dueDate || null,
         assignee_id: assigneeId || null,
       }),
@@ -92,13 +111,33 @@ export function CardDetailModal({ card, onClose, members }: CardDetailModalProps
       {card && (
         <div className="space-y-4">
           <CardFields
-            values={{ title, description, due_date: dueDate, assignee_id: assigneeId }}
+            values={{
+              title,
+              description,
+              issue_type: issueType,
+              status,
+              priority,
+              labels,
+              acceptance_criteria: acceptanceCriteria,
+              dependency_ids: dependencyIds,
+              due_date: dueDate,
+              assignee_id: assigneeId,
+            }}
             errors={errors}
             members={members}
             onTitleChange={setTitle}
             onDescriptionChange={setDescription}
+            onIssueTypeChange={setIssueType}
+            onStatusChange={setStatus}
+            onPriorityChange={setPriority}
+            onLabelsChange={setLabels}
+            onAcceptanceCriteriaChange={setAcceptanceCriteria}
+            onDependencyIdsChange={setDependencyIds}
             onDueDateChange={setDueDate}
             onAssigneeChange={setAssigneeId}
+            cardId={card.id}
+            boardCards={boardCards}
+            showDependencies
           />
 
           <button

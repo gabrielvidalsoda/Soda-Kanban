@@ -1,0 +1,17 @@
+field_key,label,label_pt,data_type,source,card_attribute,required,show_in_ui,implemented,notes,csv_aliases,example_values
+summary,Summary,Resumo,string,issue_tracker,title,true,true,true,Required in UI; maps from task_title,task_title,"API contract & member schemas"
+description,Description,Descrição,rich_text,issue_tracker,description,false,true,true,Markdown/plain textarea,,Definir schemas Pydantic…
+issue_type,Issue Type,Tipo,enum,issue_tracker,issue_type,false,true,true,Default task,,"task; bug; story"
+status,Status,Status,enum,issue_tracker,status,false,true,true,Separate from Kanban list column,,"todo; in_progress; done; blocked"
+assignee,Assignee,Responsável,person,issue_tracker,assignee_id,false,true,true,,responsible,"Dev A; Dev B"
+labels,Labels,Etiquetas,list,issue_tracker,labels,false,true,true,Tag chips,,backend; frontend
+due_date,Due Date,Data de entrega,date,issue_tracker,due_date,false,true,true,,,
+priority,Priority,Prioridade,enum,issue_tracker,priority,false,true,true,Optional,,"low; medium; high"
+acceptance_criteria,Acceptance criteria,Critérios de aceite,checklist,TASKS-fields.csv,acceptance_criteria,false,true,true,Structured checklist separate from description,,Schemas cobrem todos os campos…
+dependencies,Dependencies,Dependências,relation,TASKS-fields.csv,card_dependencies,false,true,true,Same-board cards only,,BE-01; FE-02
+task_code,Task ID,ID da tarefa,string,TASKS-fields.csv,task_code,false,false,true,Auto-generated on create; DB and API only,task_id,BE-01
+phase,Phase,Fase,string,TASKS-fields.csv,,false,false,false,Removed from scope,,
+area,Area,Área,enum,TASKS-fields.csv,,false,false,false,Removed from scope,,
+required_placeholders,Required placeholders,Placeholders obrigatórios,table,TASKS-fields.csv,,false,false,false,Removed from scope,,
+suggested_week,Suggested week,Semana sugerida,number,TASKS-fields.csv,,false,false,false,Removed from scope,,
+reporter,Reporter,Reporter,person,issue_tracker,,false,false,false,Removed from scope,,

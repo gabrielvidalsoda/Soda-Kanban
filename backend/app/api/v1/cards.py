@@ -11,6 +11,8 @@ from app.db.session import get_db
 from app.schemas import CardCreate, CardMove, CardRead, CardUpdate
 from app.services.attachments import notify_user
 from app.services.board_events import publish_board_event
+from app.services.card_dependencies import load_dependency_ids_map, sync_card_dependencies
+from app.services.cards import build_card_read, generate_task_code
 from app.services.permissions import get_card_with_board, require_board_write
 
 router = APIRouter(tags=["cards"])
@@ -24,13 +26,23 @@ async def _get_board_id_for_list(db: AsyncSession, list_id: uuid.UUID) -> uuid.U
     return board_list.board_id
 
 
+async def _assign_unique_task_code(db: AsyncSession, card: Card) -> None:
+    for _ in range(5):
+        code = generate_task_code()
+        exists = await db.execute(select(Card.id).where(Card.task_code == code))
+        if exists.scalar_one_or_none() is None:
+            card.task_code = code
+            return
+    raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not assign task code")
+
+
 @router.post("/lists/{list_id}/cards", response_model=CardRead, status_code=status.HTTP_201_CREATED)
 async def create_card(
     list_id: uuid.UUID,
     payload: CardCreate,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> Card:
+) -> CardRead:
     board_id = await _get_board_id_for_list(db, list_id)
     await require_board_write(db, board_id, user)
     if payload.position is None:
@@ -40,6 +52,8 @@ async def create_card(
         position = count.scalar_one()
     else:
         position = payload.position
+
+    criteria = [item.model_dump() for item in payload.acceptance_criteria]
     card = Card(
         list_id=list_id,
         title=payload.title,
@@ -47,9 +61,19 @@ async def create_card(
         assignee_id=payload.assignee_id,
         due_date=payload.due_date,
         position=position,
+        issue_type=payload.issue_type,
+        status=payload.status,
+        priority=payload.priority,
+        labels=payload.labels,
+        acceptance_criteria=criteria,
     )
     db.add(card)
     await db.flush()
+    await _assign_unique_task_code(db, card)
+
+    if payload.dependency_ids:
+        await sync_card_dependencies(db, card.id, payload.dependency_ids)
+
     await publish_board_event(
         str(board_id),
         {
@@ -69,7 +93,9 @@ async def create_card(
                 "Card assigned to you",
                 f'You were assigned to "{card.title}"',
             )
-    return card
+
+    dep_map = await load_dependency_ids_map(db, [card.id])
+    return build_card_read(card, dep_map.get(card.id, []))
 
 
 @router.get("/cards/{card_id}", response_model=CardRead)
@@ -77,12 +103,13 @@ async def get_card(
     card_id: uuid.UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> Card:
+) -> CardRead:
     card = await get_card_with_board(db, card_id)
     if not card:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Card not found")
     await require_board_write(db, card.board_list.board_id, user)
-    return card
+    dep_map = await load_dependency_ids_map(db, [card.id])
+    return build_card_read(card, dep_map.get(card.id, []))
 
 
 @router.patch("/cards/{card_id}", response_model=CardRead)
@@ -91,7 +118,7 @@ async def update_card(
     payload: CardUpdate,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> Card:
+) -> CardRead:
     card = await get_card_with_board(db, card_id)
     if not card:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Card not found")
@@ -99,18 +126,36 @@ async def update_card(
     await require_board_write(db, board_id, user)
 
     previous_assignee = card.assignee_id
+    fields_set = payload.model_fields_set
+
     if payload.title is not None:
         card.title = payload.title
-    if payload.description is not None:
+    if "description" in fields_set:
         card.description = payload.description
-    if payload.assignee_id is not None:
+    if "assignee_id" in fields_set:
         card.assignee_id = payload.assignee_id
-    if payload.due_date is not None:
+    if "due_date" in fields_set:
         card.due_date = payload.due_date
     if payload.list_id is not None:
         card.list_id = payload.list_id
     if payload.position is not None:
         card.position = payload.position
+    if payload.issue_type is not None:
+        card.issue_type = payload.issue_type
+    if payload.status is not None:
+        card.status = payload.status
+    if "priority" in fields_set:
+        card.priority = payload.priority
+    if payload.labels is not None:
+        card.labels = payload.labels
+    if payload.acceptance_criteria is not None:
+        card.acceptance_criteria = [item.model_dump() for item in payload.acceptance_criteria]
+
+    if not card.task_code:
+        await _assign_unique_task_code(db, card)
+
+    if payload.dependency_ids is not None:
+        await sync_card_dependencies(db, card.id, payload.dependency_ids)
 
     await publish_board_event(
         str(board_id),
@@ -126,7 +171,9 @@ async def update_card(
                 "Card assigned to you",
                 f'You were assigned to "{card.title}"',
             )
-    return card
+
+    dep_map = await load_dependency_ids_map(db, [card.id])
+    return build_card_read(card, dep_map.get(card.id, []))
 
 
 @router.patch("/cards/{card_id}/move", response_model=CardRead)
@@ -135,7 +182,7 @@ async def move_card(
     payload: CardMove,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> Card:
+) -> CardRead:
     card = await get_card_with_board(db, card_id)
     if not card:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Card not found")
@@ -159,7 +206,8 @@ async def move_card(
             "ts": datetime.now(UTC).isoformat(),
         },
     )
-    return card
+    dep_map = await load_dependency_ids_map(db, [card.id])
+    return build_card_read(card, dep_map.get(card.id, []))
 
 
 @router.delete("/cards/{card_id}", status_code=status.HTTP_204_NO_CONTENT)

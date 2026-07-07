@@ -16,9 +16,10 @@ from app.schemas import (
     BoardMemberUpdate,
     BoardRead,
     BoardUpdate,
-    CardRead,
     ListRead,
 )
+from app.services.card_dependencies import load_dependency_ids_map
+from app.services.cards import build_card_read
 from app.services.permissions import (
     require_board_admin,
     require_board_view,
@@ -100,10 +101,11 @@ async def get_board_detail(
             select(Card).where(Card.list_id.in_(list_ids)).order_by(Card.position)
         )
         cards = list(cards_result.scalars().all())
+    dep_map = await load_dependency_ids_map(db, [card.id for card in cards])
     return BoardDetailRead(
         board=BoardRead.model_validate(board),
         lists=[ListRead.model_validate(lst) for lst in lists],
-        cards=[CardRead.model_validate(card) for card in cards],
+        cards=[build_card_read(card, dep_map.get(card.id, [])) for card in cards],
     )
 
 

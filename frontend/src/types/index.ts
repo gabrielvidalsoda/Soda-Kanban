@@ -1,3 +1,12 @@
+export type TaskIssueType = "task" | "bug" | "story";
+export type TaskStatus = "todo" | "in_progress" | "done" | "blocked";
+export type TaskPriority = "low" | "medium" | "high";
+
+export interface AcceptanceCriterionItem {
+  text: string;
+  done: boolean;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -51,11 +60,18 @@ export interface BoardList {
 export interface Card {
   id: string;
   list_id: string;
+  task_code: string | null;
   title: string;
   description: string | null;
+  issue_type: "task" | "bug" | "story";
+  status: "todo" | "in_progress" | "done" | "blocked";
+  priority: "low" | "medium" | "high" | null;
+  labels: string[];
+  acceptance_criteria: { text: string; done: boolean }[];
   assignee_id: string | null;
   due_date: string | null;
   position: number;
+  dependency_ids: string[];
   created_at: string;
   updated_at: string;
 }

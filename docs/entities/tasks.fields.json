@@ -1,0 +1,187 @@
+{
+  "entity": "tasks",
+  "maps_to": "Card",
+  "fields": [
+    {
+      "field_key": "summary",
+      "label": "Summary",
+      "label_pt": "Resumo",
+      "data_type": "string",
+      "source": "issue_tracker",
+      "card_attribute": "title",
+      "required": true,
+      "show_in_ui": true,
+      "implemented": true
+    },
+    {
+      "field_key": "description",
+      "label": "Description",
+      "label_pt": "Descrição",
+      "data_type": "rich_text",
+      "source": "issue_tracker",
+      "card_attribute": "description",
+      "required": false,
+      "show_in_ui": true,
+      "implemented": true
+    },
+    {
+      "field_key": "issue_type",
+      "label": "Issue Type",
+      "label_pt": "Tipo",
+      "data_type": "enum",
+      "source": "issue_tracker",
+      "card_attribute": "issue_type",
+      "required": false,
+      "show_in_ui": true,
+      "implemented": true,
+      "example_values": ["task", "bug", "story"]
+    },
+    {
+      "field_key": "status",
+      "label": "Status",
+      "label_pt": "Status",
+      "data_type": "enum",
+      "source": "issue_tracker",
+      "card_attribute": "status",
+      "required": false,
+      "show_in_ui": true,
+      "implemented": true,
+      "example_values": ["todo", "in_progress", "done", "blocked"]
+    },
+    {
+      "field_key": "assignee",
+      "label": "Assignee",
+      "label_pt": "Responsável",
+      "data_type": "person",
+      "source": "issue_tracker",
+      "card_attribute": "assignee_id",
+      "required": false,
+      "show_in_ui": true,
+      "implemented": true
+    },
+    {
+      "field_key": "labels",
+      "label": "Labels",
+      "label_pt": "Etiquetas",
+      "data_type": "list",
+      "source": "issue_tracker",
+      "card_attribute": "labels",
+      "required": false,
+      "show_in_ui": true,
+      "implemented": true
+    },
+    {
+      "field_key": "due_date",
+      "label": "Due Date",
+      "label_pt": "Data de entrega",
+      "data_type": "date",
+      "source": "issue_tracker",
+      "card_attribute": "due_date",
+      "required": false,
+      "show_in_ui": true,
+      "implemented": true
+    },
+    {
+      "field_key": "priority",
+      "label": "Priority",
+      "label_pt": "Prioridade",
+      "data_type": "enum",
+      "source": "issue_tracker",
+      "card_attribute": "priority",
+      "required": false,
+      "show_in_ui": true,
+      "implemented": true,
+      "example_values": ["low", "medium", "high"]
+    },
+    {
+      "field_key": "acceptance_criteria",
+      "label": "Acceptance criteria",
+      "label_pt": "Critérios de aceite",
+      "data_type": "checklist",
+      "source": "TASKS-fields.csv",
+      "card_attribute": "acceptance_criteria",
+      "required": false,
+      "show_in_ui": true,
+      "implemented": true
+    },
+    {
+      "field_key": "dependencies",
+      "label": "Dependencies",
+      "label_pt": "Dependências",
+      "data_type": "relation",
+      "source": "TASKS-fields.csv",
+      "card_attribute": "card_dependencies",
+      "required": false,
+      "show_in_ui": true,
+      "implemented": true,
+      "notes": "Links to other cards on the same board"
+    },
+    {
+      "field_key": "task_code",
+      "label": "Task ID",
+      "label_pt": "ID da tarefa",
+      "data_type": "string",
+      "source": "TASKS-fields.csv",
+      "card_attribute": "task_code",
+      "required": false,
+      "show_in_ui": false,
+      "implemented": true,
+      "notes": "Auto-generated on create; DB and API only"
+    },
+    {
+      "field_key": "phase",
+      "label": "Phase",
+      "label_pt": "Fase",
+      "data_type": "string",
+      "card_attribute": null,
+      "required": false,
+      "show_in_ui": false,
+      "implemented": false,
+      "notes": "Removed from scope"
+    },
+    {
+      "field_key": "area",
+      "label": "Area",
+      "label_pt": "Área",
+      "data_type": "enum",
+      "card_attribute": null,
+      "required": false,
+      "show_in_ui": false,
+      "implemented": false,
+      "notes": "Removed from scope"
+    },
+    {
+      "field_key": "required_placeholders",
+      "label": "Required placeholders",
+      "label_pt": "Placeholders obrigatórios",
+      "data_type": "table",
+      "card_attribute": null,
+      "required": false,
+      "show_in_ui": false,
+      "implemented": false,
+      "notes": "Removed from scope"
+    },
+    {
+      "field_key": "suggested_week",
+      "label": "Suggested week",
+      "label_pt": "Semana sugerida",
+      "data_type": "number",
+      "card_attribute": null,
+      "required": false,
+      "show_in_ui": false,
+      "implemented": false,
+      "notes": "Removed from scope"
+    },
+    {
+      "field_key": "reporter",
+      "label": "Reporter",
+      "label_pt": "Reporter",
+      "data_type": "person",
+      "card_attribute": null,
+      "required": false,
+      "show_in_ui": false,
+      "implemented": false,
+      "notes": "Removed from scope"
+    }
+  ]
+}

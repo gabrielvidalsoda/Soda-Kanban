@@ -56,7 +56,12 @@ export function BoardPage() {
     mutationFn: ({ listId, ...payload }: CardFormData & { listId: string }) =>
       boardApi.createCard(listId, {
         title: payload.title,
-        description: payload.description,
+        description: payload.description || null,
+        issue_type: payload.issue_type,
+        status: payload.status,
+        priority: payload.priority,
+        labels: payload.labels,
+        acceptance_criteria: payload.acceptance_criteria,
         due_date: payload.due_date || null,
         assignee_id: payload.assignee_id || null,
       }),
@@ -156,7 +161,12 @@ export function BoardPage() {
         />
       </main>
 
-      <CardDetailModal card={selectedCard} onClose={() => setSelectedCard(null)} members={members} />
+      <CardDetailModal
+        card={selectedCard}
+        boardCards={data.cards}
+        onClose={() => setSelectedCard(null)}
+        members={members}
+      />
 
       <CardFormModal
         open={cardFormOpen}

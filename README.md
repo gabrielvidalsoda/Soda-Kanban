@@ -84,6 +84,7 @@ SODA-KANBAN/
 
 - [TODOs](todos.md) — feature backlog with status and priority
 - [Known issues](known_issues.md) — bugs and production limitations
+- [Tasks entity fields](docs/entities/tasks.fields.json) — Kanban card field catalog (issue-tracker mapping)
 
 ## API overview
 

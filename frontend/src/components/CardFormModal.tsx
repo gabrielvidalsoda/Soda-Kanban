@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { BoardList, WorkspaceMember } from "../types";
+import type { AcceptanceCriterionItem, BoardList, TaskIssueType, TaskPriority, TaskStatus, WorkspaceMember } from "../types";
 import { CardFields } from "./CardFields";
 import { Modal } from "./ui/Modal";
 import { btnPrimary, btnSecondary, inputClass, labelClass } from "./ui/styles";
@@ -12,6 +12,11 @@ import {
 export interface CardFormData {
   title: string;
   description: string;
+  issue_type: TaskIssueType;
+  status: TaskStatus;
+  priority: TaskPriority | null;
+  labels: string[];
+  acceptance_criteria: AcceptanceCriterionItem[];
   due_date: string;
   assignee_id: string;
 }
@@ -39,6 +44,11 @@ export function CardFormModal({
 }: CardFormModalProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [issueType, setIssueType] = useState<TaskIssueType>("task");
+  const [status, setStatus] = useState<TaskStatus>("todo");
+  const [priority, setPriority] = useState<TaskPriority | "">("");
+  const [labels, setLabels] = useState<string[]>([]);
+  const [acceptanceCriteria, setAcceptanceCriteria] = useState<AcceptanceCriterionItem[]>([]);
   const [dueDate, setDueDate] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
   const [errors, setErrors] = useState<CardFormErrors>({});
@@ -47,6 +57,11 @@ export function CardFormModal({
     if (open) {
       setTitle("");
       setDescription("");
+      setIssueType("task");
+      setStatus("todo");
+      setPriority("");
+      setLabels([]);
+      setAcceptanceCriteria([]);
       setDueDate("");
       setAssigneeId("");
       setErrors({});
@@ -67,6 +82,11 @@ export function CardFormModal({
     onSubmit({
       title: title.trim(),
       description: description.trim(),
+      issue_type: issueType,
+      status,
+      priority: priority || null,
+      labels,
+      acceptance_criteria: acceptanceCriteria.filter((item) => item.text.trim()),
       due_date: dueDate,
       assignee_id: assigneeId,
     });
@@ -93,11 +113,28 @@ export function CardFormModal({
         )}
 
         <CardFields
-          values={{ title, description, due_date: dueDate, assignee_id: assigneeId }}
+          values={{
+            title,
+            description,
+            issue_type: issueType,
+            status,
+            priority,
+            labels,
+            acceptance_criteria: acceptanceCriteria,
+            dependency_ids: [],
+            due_date: dueDate,
+            assignee_id: assigneeId,
+          }}
           errors={errors}
           members={members}
           onTitleChange={setTitle}
           onDescriptionChange={setDescription}
+          onIssueTypeChange={setIssueType}
+          onStatusChange={setStatus}
+          onPriorityChange={setPriority}
+          onLabelsChange={setLabels}
+          onAcceptanceCriteriaChange={setAcceptanceCriteria}
+          onDependencyIdsChange={() => {}}
           onDueDateChange={setDueDate}
           onAssigneeChange={setAssigneeId}
           autoFocusTitle

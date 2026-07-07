@@ -14,7 +14,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -32,6 +32,25 @@ class BoardVisibility(str, enum.Enum):
     PRIVATE = "private"
     TEAM = "team"
     PUBLIC = "public"
+
+
+class TaskIssueType(str, enum.Enum):
+    TASK = "task"
+    BUG = "bug"
+    STORY = "story"
+
+
+class TaskStatus(str, enum.Enum):
+    TODO = "todo"
+    IN_PROGRESS = "in_progress"
+    DONE = "done"
+    BLOCKED = "blocked"
+
+
+class TaskPriority(str, enum.Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
 
 
 class WorkspaceRole(str, enum.Enum):
@@ -174,8 +193,20 @@ class Card(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     list_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("lists.id", ondelete="CASCADE"), index=True)
+    task_code: Mapped[str | None] = mapped_column(String(50), unique=True, index=True, nullable=True)
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    issue_type: Mapped[TaskIssueType] = mapped_column(
+        _pg_enum(TaskIssueType, "task_issue_type"), default=TaskIssueType.TASK
+    )
+    status: Mapped[TaskStatus] = mapped_column(
+        _pg_enum(TaskStatus, "task_status"), default=TaskStatus.TODO
+    )
+    priority: Mapped[TaskPriority | None] = mapped_column(
+        _pg_enum(TaskPriority, "task_priority"), nullable=True
+    )
+    labels: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
+    acceptance_criteria: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
     assignee_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -190,6 +221,32 @@ class Card(Base):
     assignee: Mapped["User | None"] = relationship(foreign_keys=[assignee_id])
     comments: Mapped[list["Comment"]] = relationship(back_populates="card", order_by="Comment.created_at")
     attachments: Mapped[list["Attachment"]] = relationship(back_populates="card")
+    depends_on_links: Mapped[list["CardDependency"]] = relationship(
+        back_populates="card",
+        foreign_keys="CardDependency.card_id",
+        cascade="all, delete-orphan",
+    )
+
+
+class CardDependency(Base):
+    __tablename__ = "card_dependencies"
+    __table_args__ = (
+        UniqueConstraint("card_id", "depends_on_card_id", name="uq_card_dependency"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    card_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cards.id", ondelete="CASCADE"), index=True
+    )
+    depends_on_card_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cards.id", ondelete="CASCADE"), index=True
+    )
+
+    card: Mapped["Card"] = relationship(
+        back_populates="depends_on_links",
+        foreign_keys=[card_id],
+    )
+    depends_on: Mapped["Card"] = relationship(foreign_keys=[depends_on_card_id])
 
 
 class Comment(Base):
