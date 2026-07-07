@@ -7,11 +7,13 @@ interface SortableCardProps {
   card: Card;
   assigneeName?: string;
   onSelect: () => void;
+  dragDisabled?: boolean;
 }
 
-export function SortableCard({ card, assigneeName, onSelect }: SortableCardProps) {
+export function SortableCard({ card, assigneeName, onSelect, dragDisabled }: SortableCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
+    disabled: dragDisabled,
   });
 
   const style = {
@@ -21,7 +23,12 @@ export function SortableCard({ card, assigneeName, onSelect }: SortableCardProps
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...(dragDisabled ? {} : listeners)}
+    >
       <CardItem card={card} assigneeName={assigneeName} onClick={onSelect} />
     </div>
   );

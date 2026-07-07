@@ -1,7 +1,8 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { boardApi, workspaceApi } from "../api/client";
+import { BoardFilters } from "../components/BoardFilters";
 import { KanbanBoard } from "../components/KanbanBoard";
 import { CardDetailModal } from "../components/CardDetailModal";
 import { CardFormModal, type CardFormData } from "../components/CardFormModal";
@@ -10,6 +11,13 @@ import { AppHeader } from "../components/layout/AppHeader";
 import { ConfirmModal } from "../components/ui/ConfirmModal";
 import { btnDanger, btnPrimary, btnSecondary, inputClass } from "../components/ui/styles";
 import { exportBoardTasksCsv } from "../utils/csvTasks";
+import {
+  collectBoardLabels,
+  emptyBoardFilters,
+  filterCards,
+  hasActiveFilters,
+  type BoardFilterState,
+} from "../utils/boardFilters";
 import { useBoardSocket } from "../hooks/useBoardSocket";
 import { useAuthStore } from "../store/auth";
 import type { BoardEvent, Card } from "../types";
@@ -25,6 +33,7 @@ export function BoardPage() {
   const [targetListId, setTargetListId] = useState<string>("");
   const [deleteBoardOpen, setDeleteBoardOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [filters, setFilters] = useState<BoardFilterState>(() => emptyBoardFilters());
 
   const { data, isLoading } = useQuery({
     queryKey: ["board", boardId],
@@ -103,6 +112,16 @@ export function BoardPage() {
     createCard.mutate({ listId: targetListId, ...formData });
   };
 
+  const boardLabels = useMemo(
+    () => collectBoardLabels(data?.cards ?? []),
+    [data?.cards]
+  );
+  const filteredCards = useMemo(
+    () => filterCards(data?.cards ?? [], filters),
+    [data?.cards, filters]
+  );
+  const filtersActive = hasActiveFilters(filters);
+
   if (isLoading || !data) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
@@ -168,13 +187,22 @@ export function BoardPage() {
       />
 
       <main className="p-4 md:p-6">
+        <BoardFilters
+          filters={filters}
+          onChange={setFilters}
+          boardLabels={boardLabels}
+          members={members}
+          filteredCount={filteredCards.length}
+          totalCount={data.cards.length}
+        />
         <KanbanBoard
           lists={data.lists}
-          cards={data.cards}
+          cards={filteredCards}
           assigneeNames={assigneeNames}
           onMoveCard={(cardId, listId, position) => moveMutation.mutate({ cardId, listId, position })}
           onSelectCard={setSelectedCard}
           onAddCard={openCardForm}
+          dragDisabled={filtersActive}
         />
       </main>
 

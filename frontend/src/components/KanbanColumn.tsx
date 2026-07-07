@@ -9,9 +9,17 @@ interface KanbanColumnProps {
   assigneeNames: Record<string, string>;
   onSelectCard: (card: Card) => void;
   onAddCard: (listId: string) => void;
+  dragDisabled?: boolean;
 }
 
-export function KanbanColumn({ list, cards, assigneeNames, onSelectCard, onAddCard }: KanbanColumnProps) {
+export function KanbanColumn({
+  list,
+  cards,
+  assigneeNames,
+  onSelectCard,
+  onAddCard,
+  dragDisabled,
+}: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: `list-${list.id}` });
 
   return (
@@ -44,6 +52,7 @@ export function KanbanColumn({ list, cards, assigneeNames, onSelectCard, onAddCa
               card={card}
               assigneeName={card.assignee_id ? assigneeNames[card.assignee_id] : undefined}
               onSelect={() => onSelectCard(card)}
+              dragDisabled={dragDisabled}
             />
           ))}
         </div>

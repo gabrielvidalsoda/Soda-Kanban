@@ -19,9 +19,18 @@ interface KanbanBoardProps {
   onMoveCard: (cardId: string, listId: string, position: number) => void;
   onSelectCard: (card: Card) => void;
   onAddCard: (listId: string) => void;
+  dragDisabled?: boolean;
 }
 
-export function KanbanBoard({ lists, cards, assigneeNames, onMoveCard, onSelectCard, onAddCard }: KanbanBoardProps) {
+export function KanbanBoard({
+  lists,
+  cards,
+  assigneeNames,
+  onMoveCard,
+  onSelectCard,
+  onAddCard,
+  dragDisabled,
+}: KanbanBoardProps) {
   const [activeCard, setActiveCard] = useState<Card | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
@@ -31,11 +40,13 @@ export function KanbanBoard({ lists, cards, assigneeNames, onMoveCard, onSelectC
   }, {});
 
   const handleDragStart = (event: DragStartEvent) => {
+    if (dragDisabled) return;
     const card = cards.find((c) => c.id === event.active.id);
     if (card) setActiveCard(card);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
+    if (dragDisabled) return;
     setActiveCard(null);
     const { active, over } = event;
     if (!over) return;
@@ -61,6 +72,7 @@ export function KanbanBoard({ lists, cards, assigneeNames, onMoveCard, onSelectC
             assigneeNames={assigneeNames}
             onSelectCard={onSelectCard}
             onAddCard={onAddCard}
+            dragDisabled={dragDisabled}
           />
         ))}
 
