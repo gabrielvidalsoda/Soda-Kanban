@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -16,14 +16,18 @@ from app.schemas import (
     BoardMemberUpdate,
     BoardRead,
     BoardUpdate,
+    CardImportResult,
+    CardImportRowError,
     ListRead,
 )
 from app.constants.board_workflow import DEFAULT_BOARD_LISTS
+from app.services.card_csv_import import import_cards_from_csv
 from app.services.card_dependencies import load_dependency_ids_map
 from app.services.cards import build_card_read
 from app.services.permissions import (
     require_board_admin,
     require_board_view,
+    require_board_write,
     require_workspace_member,
 )
 
@@ -107,6 +111,29 @@ async def get_board_detail(
         board=BoardRead.model_validate(board),
         lists=[ListRead.model_validate(lst) for lst in lists],
         cards=[build_card_read(card, dep_map.get(card.id, [])) for card in cards],
+    )
+
+
+@router.post("/boards/{board_id}/cards/import", response_model=CardImportResult)
+async def import_board_cards(
+    board_id: uuid.UUID,
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> CardImportResult:
+    await require_board_write(db, board_id, user)
+
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File must be a .csv")
+
+    content = await file.read()
+    if not content.strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="CSV file is empty")
+
+    result = await import_cards_from_csv(db, board_id, user.id, content)
+    return CardImportResult(
+        created=result.created,
+        errors=[CardImportRowError(row=e.row, message=e.message) for e in result.errors],
     )
 
 

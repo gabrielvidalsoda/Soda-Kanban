@@ -4,6 +4,7 @@ import type {
   Board,
   BoardDetail,
   Card,
+  CardImportResult,
   Comment,
   Invitation,
   NotificationPreference,
@@ -126,6 +127,13 @@ export const boardApi = {
     api.post<Attachment>(`/cards/${cardId}/attachments/${attachmentId}/confirm`),
   deleteAttachment: (cardId: string, attachmentId: string) =>
     api.delete(`/cards/${cardId}/attachments/${attachmentId}`),
+  importCards: (boardId: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return api.post<CardImportResult>(`/boards/${boardId}/cards/import`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
 };
 
 export async function uploadFileToPresignedUrl(uploadUrl: string, file: File): Promise<void> {

@@ -5,9 +5,11 @@ import { boardApi, workspaceApi } from "../api/client";
 import { KanbanBoard } from "../components/KanbanBoard";
 import { CardDetailModal } from "../components/CardDetailModal";
 import { CardFormModal, type CardFormData } from "../components/CardFormModal";
+import { ImportTasksModal } from "../components/ImportTasksModal";
 import { AppHeader } from "../components/layout/AppHeader";
 import { ConfirmModal } from "../components/ui/ConfirmModal";
-import { btnDanger, btnPrimary, inputClass } from "../components/ui/styles";
+import { btnDanger, btnPrimary, btnSecondary, inputClass } from "../components/ui/styles";
+import { exportBoardTasksCsv } from "../utils/csvTasks";
 import { useBoardSocket } from "../hooks/useBoardSocket";
 import { useAuthStore } from "../store/auth";
 import type { BoardEvent, Card } from "../types";
@@ -22,6 +24,7 @@ export function BoardPage() {
   const [cardFormOpen, setCardFormOpen] = useState(false);
   const [targetListId, setTargetListId] = useState<string>("");
   const [deleteBoardOpen, setDeleteBoardOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["board", boardId],
@@ -129,6 +132,20 @@ export function BoardPage() {
               <option value="team">Team</option>
               <option value="public">Public</option>
             </select>
+            <button
+              type="button"
+              onClick={() => exportBoardTasksCsv(data, members)}
+              className={btnSecondary}
+            >
+              Export
+            </button>
+            <button
+              type="button"
+              onClick={() => setImportModalOpen(true)}
+              className={btnSecondary}
+            >
+              Import
+            </button>
             <button onClick={() => openCardForm()} className={btnPrimary}>
               Add card
             </button>
@@ -177,6 +194,12 @@ export function BoardPage() {
         listId={targetListId}
         onListChange={setTargetListId}
         members={members}
+      />
+
+      <ImportTasksModal
+        open={importModalOpen}
+        boardId={boardId!}
+        onClose={() => setImportModalOpen(false)}
       />
     </div>
   );

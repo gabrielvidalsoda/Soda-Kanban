@@ -313,3 +313,13 @@ class BoardDetailRead(BaseModel):
     board: BoardRead
     lists: list[ListRead]
     cards: list[CardRead]
+
+
+class CardImportRowError(BaseModel):
+    row: int
+    message: str
+
+
+class CardImportResult(BaseModel):
+    created: int
+    errors: list[CardImportRowError]

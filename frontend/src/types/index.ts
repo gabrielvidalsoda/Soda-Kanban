@@ -103,6 +103,16 @@ export interface PresignedUploadResponse {
   s3_key: string;
 }
 
+export interface CardImportRowError {
+  row: number;
+  message: string;
+}
+
+export interface CardImportResult {
+  created: number;
+  errors: CardImportRowError[];
+}
+
 export interface BoardDetail {
   board: Board;
   lists: BoardList[];
