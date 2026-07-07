@@ -32,6 +32,7 @@ async def _assign_unique_task_code(db: AsyncSession, card: Card) -> None:
         exists = await db.execute(select(Card.id).where(Card.task_code == code))
         if exists.scalar_one_or_none() is None:
             card.task_code = code
+            await db.flush()
             return
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not assign task code")
 
@@ -95,6 +96,7 @@ async def create_card(
             )
 
     dep_map = await load_dependency_ids_map(db, [card.id])
+    await db.refresh(card)
     return build_card_read(card, dep_map.get(card.id, []))
 
 
@@ -173,6 +175,7 @@ async def update_card(
             )
 
     dep_map = await load_dependency_ids_map(db, [card.id])
+    await db.refresh(card)
     return build_card_read(card, dep_map.get(card.id, []))
 
 
@@ -207,6 +210,7 @@ async def move_card(
         },
     )
     dep_map = await load_dependency_ids_map(db, [card.id])
+    await db.refresh(card)
     return build_card_read(card, dep_map.get(card.id, []))
 
 

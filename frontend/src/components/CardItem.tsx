@@ -1,5 +1,11 @@
 import type { Card } from "../types";
-import { TASK_ISSUE_TYPE_OPTIONS } from "../entities/taskFields";
+import {
+  coloredBadgeStyle,
+  ISSUE_TYPE_COLORS,
+  PRIORITY_COLORS,
+  priorityDotStyle,
+} from "../entities/taskFieldColors";
+import { TASK_ISSUE_TYPE_OPTIONS, TASK_PRIORITY_OPTIONS } from "../entities/taskFields";
 
 interface CardItemProps {
   card: Card;
@@ -23,18 +29,18 @@ function formatDueDate(dateStr: string): string {
 }
 
 const ISSUE_TYPE_LABELS = Object.fromEntries(
-  TASK_ISSUE_TYPE_OPTIONS.map((opt) => [opt.value, opt.label])
+  TASK_ISSUE_TYPE_OPTIONS.map((opt) => [opt.value, opt.label.toUpperCase()])
 );
 
-const PRIORITY_DOT: Record<string, string> = {
-  low: "bg-gray-400",
-  medium: "bg-yellow-400",
-  high: "bg-red-500",
-};
+const PRIORITY_LABELS = Object.fromEntries(
+  TASK_PRIORITY_OPTIONS.map((opt) => [opt.value, opt.label.toUpperCase()])
+);
 
 export function CardItem({ card, assigneeName, onClick, isDragging }: CardItemProps) {
   const visibleLabels = (card.labels ?? []).slice(0, 2);
   const extraLabelCount = (card.labels?.length ?? 0) - visibleLabels.length;
+  const issueTypeColor = ISSUE_TYPE_COLORS[card.issue_type];
+  const priorityColor = card.priority ? PRIORITY_COLORS[card.priority] : null;
 
   return (
     <div
@@ -44,35 +50,45 @@ export function CardItem({ card, assigneeName, onClick, isDragging }: CardItemPr
       }`}
     >
       <div className="flex items-start gap-2">
-        {card.priority && (
+        {card.priority && priorityColor && (
           <span
-            className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${PRIORITY_DOT[card.priority]}`}
-            title={`${card.priority} priority`}
+            className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+            style={priorityDotStyle(priorityColor)}
+            title={`${PRIORITY_LABELS[card.priority]} priority`}
           />
         )}
         <p className="text-sm font-medium text-white leading-snug flex-1">{card.title}</p>
       </div>
 
-      {(card.issue_type !== "task" || visibleLabels.length > 0) && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          {card.issue_type !== "task" && (
-            <span className="rounded bg-gray-700 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-300">
-              {ISSUE_TYPE_LABELS[card.issue_type] ?? card.issue_type}
-            </span>
-          )}
-          {visibleLabels.map((label) => (
-            <span
-              key={label}
-              className="rounded-full bg-gray-700/80 px-2 py-0.5 text-[10px] text-gray-300"
-            >
-              {label}
-            </span>
-          ))}
-          {extraLabelCount > 0 && (
-            <span className="text-[10px] text-gray-500">+{extraLabelCount}</span>
-          )}
-        </div>
-      )}
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <span
+          className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+          style={coloredBadgeStyle(issueTypeColor)}
+          title={ISSUE_TYPE_LABELS[card.issue_type] ?? card.issue_type}
+        >
+          {ISSUE_TYPE_LABELS[card.issue_type] ?? card.issue_type}
+        </span>
+        {card.priority && priorityColor && (
+          <span
+            className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+            style={coloredBadgeStyle(priorityColor)}
+            title={`${PRIORITY_LABELS[card.priority]} priority`}
+          >
+            {PRIORITY_LABELS[card.priority]}
+          </span>
+        )}
+        {visibleLabels.map((label) => (
+          <span
+            key={label}
+            className="rounded-full bg-gray-700/80 px-2 py-0.5 text-[10px] text-gray-300"
+          >
+            {label}
+          </span>
+        ))}
+        {extraLabelCount > 0 && (
+          <span className="text-[10px] text-gray-500">+{extraLabelCount}</span>
+        )}
+      </div>
 
       <div className="flex items-center justify-between mt-3">
         <div className="flex items-center gap-2 text-gray-400">

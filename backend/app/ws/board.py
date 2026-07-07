@@ -10,7 +10,7 @@ from sqlalchemy import select
 from app.auth.jwt import decode_access_token
 from app.db.models import Board
 from app.db.session import async_session_factory
-from app.services.board_events import get_redis
+from app.services.board_events import create_pubsub_redis
 from app.services.permissions import can_view_board
 
 logger = logging.getLogger(__name__)
@@ -43,18 +43,29 @@ class ConnectionManager:
             self.disconnect(board_id, ws)
 
     async def _redis_listener(self) -> None:
-        try:
-            redis = await get_redis()
-            pubsub = redis.pubsub()
-            await pubsub.psubscribe("board:*")
-            async for message in pubsub.listen():
-                if message["type"] != "pmessage":
-                    continue
-                channel = message["channel"]
-                board_id = channel.split(":", 1)[1]
-                await self.broadcast(board_id, message["data"])
-        except Exception:
-            logger.exception("Redis listener failed")
+        while True:
+            redis = None
+            pubsub = None
+            try:
+                redis = create_pubsub_redis()
+                pubsub = redis.pubsub()
+                await pubsub.psubscribe("board:*")
+                async for message in pubsub.listen():
+                    if message["type"] != "pmessage":
+                        continue
+                    channel = message["channel"]
+                    board_id = channel.split(":", 1)[1]
+                    await self.broadcast(board_id, message["data"])
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("Redis listener failed")
+                await asyncio.sleep(1)
+            finally:
+                if pubsub is not None:
+                    await pubsub.aclose()
+                if redis is not None:
+                    await redis.aclose()
 
 
 manager = ConnectionManager()

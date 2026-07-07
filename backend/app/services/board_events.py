@@ -19,6 +19,11 @@ async def get_redis() -> aioredis.Redis:
     return _redis
 
 
+def create_pubsub_redis() -> aioredis.Redis:
+    # Pub/sub listen blocks until a message arrives; disable read timeout.
+    return aioredis.from_url(settings.redis_url, decode_responses=True, socket_timeout=None)
+
+
 def board_channel(board_id: str) -> str:
     return f"board:{board_id}"
 
