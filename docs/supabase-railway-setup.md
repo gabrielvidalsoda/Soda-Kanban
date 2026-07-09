@@ -22,12 +22,42 @@ Run the SQL in [`supabase-storage.sql`](supabase-storage.sql) in the Supabase SQ
 
 Creates private buckets `attachments` and `avatars` with service-role access.
 
-## 3. Resend (email)
+## 3. Keycloak (email)
 
-1. Create account at [resend.com](https://resend.com).
-2. Verify a sending domain (or use sandbox for testing).
-3. Create API key → `RESEND_API_KEY`.
-4. Set `FROM_EMAIL` to a verified address.
+Keycloak sends email for identity flows (verify email, password reset, admin notifications). Configure SMTP in your realm so those messages can be delivered. Use the **same SMTP server** for workspace invite emails from the API.
+
+Docs: [Keycloak — Configuring email for a realm](https://www.keycloak.org/docs/latest/server_admin/index.html#_email)
+
+### 3.1 Deploy or access Keycloak
+
+1. Run Keycloak (self-hosted, Railway, or another host) and create a realm for SODA KANBAN.
+2. Open **Realm settings → Email**.
+
+### 3.2 Configure SMTP (Email tab)
+
+Fill in the fields per the [Keycloak email documentation](https://www.keycloak.org/docs/latest/server_admin/index.html#_email):
+
+| Field | Purpose |
+|-------|---------|
+| **From** | Sender address (`FROM_EMAIL` for the API) |
+| **From display name** | Optional friendly name (e.g. `SODA KANBAN`) |
+| **Reply to** | Optional reply address |
+| **Host** | SMTP server hostname |
+| **Port** | Usually `587` (STARTTLS) or `465` (SSL/TLS) |
+| **Encryption** | Enable SSL/TLS if your provider requires it |
+| **Authentication** | ON if your SMTP server requires login |
+| **Username** / **Password** | SMTP credentials (password auth) |
+
+For OAuth2-based SMTP (e.g. Microsoft 365), use **Authentication Type: token** and follow [XOAUTH2 email configuration](https://www.keycloak.org/docs/latest/server_admin/index.html#_email) in the Keycloak docs.
+
+### 3.3 Test Keycloak email
+
+1. In **Realm settings → Email**, click **Save**, then **Test connection** (if available).
+2. Enable **Verify email** or **Forgot password** under **Realm settings → Login** and confirm a test user receives mail.
+
+### 3.4 API email (workspace invites)
+
+The FastAPI app sends invite and notification email through the same SMTP server. On Railway, set the SMTP variables below to match the Keycloak **Email** tab values.
 
 ## 4. Database migrations
 
@@ -54,8 +84,12 @@ Confirm tables appear in Supabase Table Editor.
 | `SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role key |
 | `SUPABASE_JWT_SECRET` | JWT secret |
-| `RESEND_API_KEY` | Resend API key |
-| `FROM_EMAIL` | Verified sender |
+| `SMTP_HOST` | Same as Keycloak Email → Host |
+| `SMTP_PORT` | Same as Keycloak Email → Port (e.g. `587` or `465`) |
+| `SMTP_USER` | SMTP username (if authentication enabled) |
+| `SMTP_PASSWORD` | SMTP password |
+| `SMTP_USE_TLS` | `true` for STARTTLS on port 587; `false` if using SSL on 465 |
+| `FROM_EMAIL` | Same as Keycloak Email → From |
 | `CORS_ORIGINS` | `["https://YOUR-FRONTEND.up.railway.app"]` |
 | `FRONTEND_URL` | Frontend Railway URL |
 | `RUN_MIGRATIONS` | `true` (first deploy) |
@@ -78,6 +112,19 @@ Confirm tables appear in Supabase Table Editor.
 
 5. Generate public domain.
 
+### Troubleshooting: `Railpack could not determine how to build the app`
+
+This happens when Railway builds the **repo root** (`.`) instead of a service folder. The root is a monorepo (`backend/`, `frontend/`) with no `package.json` or `Dockerfile` at the top level.
+
+**Fix:** For each Railway service, set **Settings → Root Directory**:
+
+| Service | Root Directory | Builder |
+|---------|----------------|---------|
+| API | `backend` | Dockerfile (uses [`backend/railway.toml`](../backend/railway.toml)) |
+| Frontend | `frontend` | Railpack/Nixpacks (uses [`frontend/railway.toml`](../frontend/railway.toml)) |
+
+Then trigger a new deploy. Do **not** deploy from `/` (repository root).
+
 ## 7. Wire URLs
 
 1. Update API `CORS_ORIGINS` and `FRONTEND_URL` with real frontend URL.
@@ -95,7 +142,7 @@ Confirm tables appear in Supabase Table Editor.
 - [ ] Real-time updates in two tabs
 - [ ] Upload/download/delete attachment
 - [ ] Upload avatar; survives API redeploy
-- [ ] Invite email arrives (Resend dashboard)
+- [ ] Invite email arrives (check recipient inbox; confirm SMTP in Keycloak **Realm settings → Email**)
 - [ ] GitHub CI passes on PR (tests only, no AWS secrets)
 
 ## 9. Decommission AWS (after stable cutover)

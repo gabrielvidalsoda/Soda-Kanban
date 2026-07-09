@@ -1,0 +1,6 @@
+[build]
+buildCommand = "npm ci && npm run build"
+
+[deploy]
+startCommand = "npx serve dist -s -l $PORT"
+restartPolicyType = "ON_FAILURE"
