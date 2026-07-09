@@ -79,7 +79,8 @@ Confirm tables appear in Supabase Table Editor.
 
 | Variable | Value |
 |----------|-------|
-| `DATABASE_URL` | Supabase pooler URL (`postgresql+asyncpg://...:6543/...`) |
+| `DATABASE_URL` | Supabase **transaction pooler** URL (`postgresql+asyncpg://...:6543/...`) — used by the API at runtime |
+| `DATABASE_URL_DIRECT` | Supabase **direct/session** URL (`postgresql+asyncpg://...:5432/...`) — **required for migrations** |
 | `REDIS_URL` | Railway Redis reference |
 | `SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role key |
@@ -95,6 +96,8 @@ Confirm tables appear in Supabase Table Editor.
 | `RUN_MIGRATIONS` | `true` (first deploy) |
 
 5. Generate public domain; verify `GET /health` returns `{"status":"ok"}`.
+
+**Supabase URL tips:** Copy the connection string from Supabase and ensure it uses `postgresql+asyncpg://` (the app normalizes `postgres://` automatically). Supabase requires SSL from Railway — the app enables `ssl=require` for `*.supabase.co` hosts. Set **both** `DATABASE_URL` (pooler, port `6543`) and `DATABASE_URL_DIRECT` (direct, port `5432`).
 
 ## 6. Railway — frontend service
 

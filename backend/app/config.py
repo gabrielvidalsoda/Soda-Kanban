@@ -2,6 +2,8 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.database_url import normalize_asyncpg_url
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
@@ -31,8 +33,13 @@ class Settings(BaseSettings):
     max_attachment_bytes: int = 10 * 1024 * 1024
 
     @property
+    def normalized_database_url(self) -> str:
+        return normalize_asyncpg_url(self.database_url)
+
+    @property
     def migration_database_url(self) -> str:
-        return self.database_url_direct or self.database_url
+        source = self.database_url_direct or self.database_url
+        return normalize_asyncpg_url(source)
 
 
 @lru_cache

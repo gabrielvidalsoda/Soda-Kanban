@@ -1,7 +1,7 @@
 """supabase auth cleanup
 
-Revision ID: 005
-Revises: 004
+Revision ID: 007
+Revises: 006
 Create Date: 2026-07-09
 """
 
@@ -10,8 +10,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "005"
-down_revision: Union[str, None] = "004"
+revision: str = "007"
+down_revision: Union[str, None] = "006"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
