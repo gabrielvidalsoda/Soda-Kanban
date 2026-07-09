@@ -80,7 +80,6 @@ class User(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -92,23 +91,10 @@ class User(Base):
     workspace: Mapped["Workspace"] = relationship(foreign_keys=[workspace_id])
     workspace_memberships: Mapped[list["WorkspaceMember"]] = relationship(back_populates="user")
     board_memberships: Mapped[list["BoardMember"]] = relationship(back_populates="user")
-    refresh_tokens: Mapped[list["RefreshToken"]] = relationship(back_populates="user")
     comments: Mapped[list["Comment"]] = relationship(back_populates="author")
     notification_preferences: Mapped[list["NotificationPreference"]] = relationship(
         back_populates="user"
     )
-
-
-class RefreshToken(Base):
-    __tablename__ = "refresh_tokens"
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
-    token_hash: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-    user: Mapped["User"] = relationship(back_populates="refresh_tokens")
 
 
 class Workspace(Base):
@@ -271,7 +257,7 @@ class Attachment(Base):
     card_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("cards.id", ondelete="CASCADE"), index=True)
     uploaded_by_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     filename: Mapped[str] = mapped_column(String(500), nullable=False)
-    s3_key: Mapped[str] = mapped_column(String(1000), nullable=False)
+    storage_path: Mapped[str] = mapped_column(String(1000), nullable=False)
     content_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
     size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -100,7 +100,7 @@ export interface Attachment {
 export interface PresignedUploadResponse {
   upload_url: string;
   attachment_id: string;
-  s3_key: string;
+  storage_path: string;
 }
 
 export interface CardImportRowError {
@@ -124,12 +124,6 @@ export interface NotificationPreference {
   email_enabled: boolean;
 }
 
-export interface TokenResponse {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-  user: User;
-}
 
 export interface BoardEvent {
   type: string;

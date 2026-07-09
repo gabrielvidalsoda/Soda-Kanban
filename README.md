@@ -1,26 +1,27 @@
 # SODA KANBAN
 
-**Live app:** [https://dd8ag4utxbsvy.cloudfront.net](https://dd8ag4utxbsvy.cloudfront.net)
-
-A Kanban application with workspaces, real-time board sync, email notifications, and AWS deployment.
+A Kanban application with workspaces, real-time board sync, and email notifications.
 
 ## Stack
 
 | Layer | Technology |
 |-------|------------|
-| Frontend | React 18, TypeScript, Vite, Tailwind CSS, @dnd-kit, TanStack Query |
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS, Supabase Auth |
 | Backend | Python 3.11, FastAPI, SQLAlchemy, Alembic, Poetry |
-| Database | PostgreSQL 16 |
+| Database | Supabase PostgreSQL |
+| Auth | Supabase Auth |
+| Storage | Supabase Storage (attachments, avatars) |
 | Cache / pub-sub | Redis 7 |
-| Cloud | AWS (RDS, ECS Fargate, S3, CloudFront, ElastiCache, SES, ECR) |
+| Email | Resend |
+| Hosting | Railway (API + Redis + frontend) |
 
 ## Features
 
-- Email/password authentication with JWT access + refresh tokens
+- Email/password authentication via Supabase Auth
 - Workspaces with team members and invite links
 - Kanban boards with lists, cards, drag-and-drop
 - Card details: description, assignee, due date, comments
-- File attachments via S3 presigned URLs
+- File attachments via Supabase Storage signed URLs
 - Board visibility: private, team, public
 - Real-time board updates via WebSockets + Redis pub/sub
 - Configurable email notification preferences
@@ -32,6 +33,7 @@ A Kanban application with workspaces, real-time board sync, email notifications,
 - Docker & Docker Compose
 - Poetry 2.x
 - Node.js 20+
+- Supabase project (or [Supabase CLI](https://supabase.com/docs/guides/cli) for local auth)
 
 ### 1. Start infrastructure
 
@@ -44,7 +46,7 @@ docker compose up -d postgres redis
 
 ```bash
 cd backend
-cp .env.example .env
+cp .env.example .env   # set Supabase URL, keys, JWT secret
 poetry install
 poetry run alembic upgrade head
 poetry run uvicorn app.main:app --reload
@@ -57,6 +59,7 @@ Docs: http://localhost:8000/docs
 
 ```bash
 cd frontend
+cp .env.example .env   # set VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
 npm install
 npm run dev
 ```
@@ -74,10 +77,12 @@ docker compose up --build
 
 ```
 SODA-KANBAN/
-├── backend/          # FastAPI API (Poetry)
-├── frontend/         # React SPA (Vite)
-├── infra/            # docker-compose + Terraform
-└── .github/workflows # CI/CD
+├── backend/                    # FastAPI API (Poetry)
+├── frontend/                   # React SPA (Vite)
+├── docs/                       # Deployment guides
+├── infra/                      # docker-compose
+├── infra/terraform-aws-legacy/ # Archived AWS Terraform
+└── .github/workflows           # CI (tests only)
 ```
 
 ## Project tracking
@@ -95,47 +100,24 @@ SODA-KANBAN/
 | Boards | `/api/v1/boards` |
 | WebSocket | `/ws/boards/{board_id}?token=...` |
 
-## AWS deployment
+## Production deployment (Supabase + Railway)
 
-Full instructions: [`infra/terraform/README.md`](infra/terraform/README.md)
+Full step-by-step guide: [`docs/supabase-railway-setup.md`](docs/supabase-railway-setup.md)
 
-### Quick summary
+### Summary
 
-1. **Bootstrap** remote Terraform state (`infra/terraform/bootstrap/`)
-2. **Apply** Terraform with secrets and optional `github_repository`
-3. **Push** the first Docker image to ECR
-4. **Re-apply** with `frontend_url` set to the CloudFront URL (unless using a custom domain)
-5. **Configure** GitHub secrets from `terraform output`
-6. **Request** SES production access for outbound email
+1. Create Supabase project (Postgres, Auth, Storage)
+2. Run [`docs/supabase-storage.sql`](docs/supabase-storage.sql) for storage buckets
+3. Create Resend account for transactional email
+4. Run Alembic migrations against Supabase
+5. Deploy API (`backend/`) and frontend (`frontend/`) on Railway with Redis
+6. Wire CORS, Supabase auth URLs, and frontend env vars
 
-```bash
-cd infra/terraform
-cp terraform.tfvars.example terraform.tfvars  # edit as needed
-terraform init
-terraform apply \
-  -var="database_password=..." \
-  -var="jwt_secret=..." \
-  -var="github_repository=your-org/soda-kanba"
-```
+GitHub Actions runs backend tests and frontend build on PRs. Railway deploys from GitHub on push to `main`.
 
-GitHub Actions (`.github/workflows/ci.yml`) runs tests on PRs and on push to `main`:
+## Legacy AWS deployment
 
-- Builds and pushes the API image to ECR
-- Runs Alembic migrations via ECS run-task
-- Deploys ECS service
-- Syncs frontend to S3 and invalidates CloudFront
-
-### GitHub secrets
-
-| Secret | Terraform output |
-|--------|------------------|
-| `AWS_DEPLOY_ROLE_ARN` | `deploy_role_arn` |
-| `FRONTEND_S3_BUCKET` | `frontend_s3_bucket` |
-| `CLOUDFRONT_DISTRIBUTION_ID` | `cloudfront_distribution_id` |
-
-### Optional: custom domain
-
-Set `domain_name` and `route53_zone_id` in Terraform to provision ACM, CloudFront alias, and Route 53 records automatically.
+The previous AWS stack (ECS, RDS, S3, CloudFront) is archived in [`infra/terraform-aws-legacy/`](infra/terraform-aws-legacy/). See [`docs/cloud-alternatives.md`](docs/cloud-alternatives.md) for why we migrated.
 
 ## Testing
 

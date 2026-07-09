@@ -1,6 +1,7 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { authApi } from "../api/client";
+import { authApi, userApi } from "../api/client";
+import { supabase } from "../lib/supabase";
 import { useAuthStore } from "../store/auth";
 import { btnPrimary, inputClass, labelClass } from "../components/ui/styles";
 import { workspaceHomePath } from "../utils/workspace";
@@ -15,9 +16,22 @@ function AuthFormShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+async function loadAppUser(inviteToken?: string, name?: string) {
+  try {
+    const { data } = await userApi.me();
+    return data;
+  } catch (err: unknown) {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 404 && name) {
+      return authApi.completeRegistration({ name, invite_token: inviteToken });
+    }
+    throw err;
+  }
+}
+
 export function LoginPage() {
   const navigate = useNavigate();
-  const setAuth = useAuthStore((s) => s.setAuth);
+  const setUser = useAuthStore((s) => s.setUser);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -26,11 +40,16 @@ export function LoginPage() {
     e.preventDefault();
     setError("");
     try {
-      const { data } = await authApi.login({ email, password });
-      setAuth(data.user, data.access_token, data.refresh_token);
-      navigate(workspaceHomePath(data.user));
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) {
+        setError("Invalid email or password");
+        return;
+      }
+      const user = await loadAppUser();
+      setUser(user);
+      navigate(workspaceHomePath(user));
     } catch {
-      setError("Invalid email or password");
+      setError("Could not load your profile. Try again or complete registration.");
     }
   };
 
@@ -81,7 +100,7 @@ export function LoginPage() {
 export function RegisterPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const setAuth = useAuthStore((s) => s.setAuth);
+  const setUser = useAuthStore((s) => s.setUser);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -92,9 +111,22 @@ export function RegisterPage() {
     e.preventDefault();
     setError("");
     try {
-      const { data } = await authApi.register({ name, email, password, invite_token: inviteToken });
-      setAuth(data.user, data.access_token, data.refresh_token);
-      navigate(workspaceHomePath(data.user));
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password });
+      if (signUpError) {
+        if (signUpError.message.toLowerCase().includes("already")) {
+          setError("This email is already registered. Sign in instead.");
+        } else {
+          setError(signUpError.message);
+        }
+        return;
+      }
+      if (!signUpData.session) {
+        setError("Check your email to confirm your account, then sign in.");
+        return;
+      }
+      const user = await authApi.completeRegistration({ name, invite_token: inviteToken });
+      setUser(user);
+      navigate(workspaceHomePath(user));
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number; data?: { detail?: string } } })?.response?.status;
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
@@ -161,13 +193,38 @@ export function RegisterPage() {
 
 export function ResetPasswordPage() {
   const navigate = useNavigate();
-  const setAuth = useAuthStore((s) => s.setAuth);
+  const setUser = useAuthStore((s) => s.setUser);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [recoveryMode, setRecoveryMode] = useState(false);
 
-  const handleSubmit = async (e: FormEvent) => {
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setRecoveryMode(true);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleRequestReset = async (e: FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setMessage("");
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (resetError) {
+      setError(resetError.message);
+      return;
+    }
+    setMessage("Check your email for a password reset link.");
+  };
+
+  const handleUpdatePassword = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
     if (password !== confirmPassword) {
@@ -175,29 +232,63 @@ export function ResetPasswordPage() {
       return;
     }
     try {
-      const { data } = await authApi.resetPassword({ email, password });
-      setAuth(data.user, data.access_token, data.refresh_token);
-      navigate(workspaceHomePath(data.user));
-    } catch (err: unknown) {
-      const status = (err as { response?: { status?: number; data?: { detail?: string } } })?.response
-        ?.status;
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      if (status === 404) {
-        setError(
-          typeof detail === "string" && detail ? detail : "No account found for this email",
-        );
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+      if (updateError) {
+        setError(updateError.message);
         return;
       }
-      setError("Could not reset password. Please try again.");
+      const user = await userApi.me().then((r) => r.data);
+      setUser(user);
+      navigate(workspaceHomePath(user));
+    } catch {
+      setError("Could not update password. Try the reset link again.");
     }
   };
+
+  if (recoveryMode) {
+    return (
+      <AuthFormShell>
+        <h1 className="text-2xl font-bold text-white mb-2">Set new password</h1>
+        <p className="text-sm text-gray-400 mb-6">Choose a new password for your account.</p>
+        {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
+        <form onSubmit={handleUpdatePassword} className="space-y-4">
+          <div>
+            <label className={labelClass}>New password</label>
+            <input
+              type="password"
+              required
+              minLength={8}
+              className={inputClass}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Confirm password</label>
+            <input
+              type="password"
+              required
+              minLength={8}
+              className={inputClass}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+            />
+          </div>
+          <button type="submit" className={`w-full ${btnPrimary} py-2.5`}>
+            Update password
+          </button>
+        </form>
+      </AuthFormShell>
+    );
+  }
 
   return (
     <AuthFormShell>
       <h1 className="text-2xl font-bold text-white mb-2">Reset password</h1>
-      <p className="text-sm text-gray-400 mb-6">Enter your email and choose a new password.</p>
+      <p className="text-sm text-gray-400 mb-6">Enter your email and we will send you a reset link.</p>
       {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
-      <form onSubmit={handleSubmit} className="space-y-4">
+      {message && <p className="text-green-400 text-sm mb-4">{message}</p>}
+      <form onSubmit={handleRequestReset} className="space-y-4">
         <div>
           <label className={labelClass}>Email</label>
           <input
@@ -208,30 +299,8 @@ export function ResetPasswordPage() {
             onChange={(e) => setEmail(e.target.value)}
           />
         </div>
-        <div>
-          <label className={labelClass}>New password</label>
-          <input
-            type="password"
-            required
-            minLength={8}
-            className={inputClass}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
-        <div>
-          <label className={labelClass}>Confirm password</label>
-          <input
-            type="password"
-            required
-            minLength={8}
-            className={inputClass}
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-          />
-        </div>
         <button type="submit" className={`w-full ${btnPrimary} py-2.5`}>
-          Reset password
+          Send reset link
         </button>
       </form>
       <p className="text-center text-sm text-gray-400 mt-6">

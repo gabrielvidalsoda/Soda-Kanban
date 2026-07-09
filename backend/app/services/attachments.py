@@ -2,37 +2,41 @@ import logging
 import uuid
 from datetime import UTC, datetime, timedelta
 
-import boto3
-from botocore.exceptions import ClientError
-from fastapi import HTTPException, status
+from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.db.models import Attachment, NotificationEventType, NotificationPreference, User
 from app.services.permissions import get_card_with_board, require_board_write
+from app.services.supabase_client import get_supabase_client
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 PENDING_ATTACHMENT_TTL = timedelta(hours=1)
 
-
-def _s3_client():
-    kwargs = {"region_name": settings.aws_region}
-    if settings.s3_endpoint_url:
-        kwargs["endpoint_url"] = settings.s3_endpoint_url
-    return boto3.client("s3", **kwargs)
-
-
-def _ses_client():
-    return boto3.client("ses", region_name=settings.aws_region)
+ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+EXTENSIONS = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
 
 
-def delete_s3_object(s3_key: str) -> None:
+def _attachments_bucket():
+    return get_supabase_client().storage.from_(settings.supabase_attachments_bucket)
+
+
+def _avatars_bucket():
+    return get_supabase_client().storage.from_(settings.supabase_avatars_bucket)
+
+
+def delete_storage_object(bucket_name: str, storage_path: str) -> None:
     try:
-        _s3_client().delete_object(Bucket=settings.s3_bucket, Key=s3_key)
-    except ClientError:
-        logger.exception("Failed to delete S3 object %s", s3_key)
+        get_supabase_client().storage.from_(bucket_name).remove([storage_path])
+    except Exception:
+        logger.exception("Failed to delete storage object %s/%s", bucket_name, storage_path)
 
 
 def _validate_attachment_size(size_bytes: int) -> None:
@@ -71,28 +75,26 @@ async def create_presigned_upload(
     await cleanup_stale_pending_attachments(db, card_id)
 
     attachment_id = uuid.uuid4()
-    s3_key = f"workspaces/cards/{card_id}/{attachment_id}-{filename}"
+    storage_path = f"workspaces/cards/{card_id}/{attachment_id}-{filename}"
     attachment = Attachment(
         id=attachment_id,
         card_id=card_id,
         uploaded_by_id=user.id,
         filename=filename,
-        s3_key=s3_key,
+        storage_path=storage_path,
         content_type=content_type,
     )
     db.add(attachment)
     await db.flush()
 
-    client = _s3_client()
-    upload_url = client.generate_presigned_url(
-        "put_object",
-        Params={
-            "Bucket": settings.s3_bucket,
-            "Key": s3_key,
-            "ContentType": content_type or "application/octet-stream",
-        },
-        ExpiresIn=settings.presigned_url_expire_seconds,
-    )
+    bucket = _attachments_bucket()
+    result = bucket.create_signed_upload_url(storage_path)
+    upload_url = result.get("signedUrl") or result.get("signedURL")
+    if not upload_url:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not create upload URL",
+        )
     return attachment, upload_url
 
 
@@ -111,24 +113,32 @@ async def confirm_attachment(
     if not attachment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
 
-    client = _s3_client()
+    bucket = _attachments_bucket()
     try:
-        head = client.head_object(Bucket=settings.s3_bucket, Key=attachment.s3_key)
-    except ClientError as exc:
-        error_code = exc.response.get("Error", {}).get("Code")
-        if error_code in {"404", "NoSuchKey", "NotFound"}:
-            await db.delete(attachment)
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found"
-            ) from exc
-        logger.exception("Failed to head S3 object %s", attachment.s3_key)
+        files = bucket.list(path=attachment.storage_path.rsplit("/", 1)[0])
+        uploaded = next(
+            (f for f in files if f.get("name") == attachment.storage_path.split("/")[-1]),
+            None,
+        )
+    except Exception as exc:
+        logger.exception("Failed to verify upload for %s", attachment.storage_path)
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY, detail="Could not verify upload"
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not verify upload",
         ) from exc
 
-    content_length = head.get("ContentLength", 0)
+    if not uploaded:
+        await db.delete(attachment)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+
+    metadata = uploaded.get("metadata") or {}
+    content_length = int(metadata.get("size") or uploaded.get("size") or 0)
+    if content_length <= 0:
+        await db.delete(attachment)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
+
     if content_length > settings.max_attachment_bytes:
-        delete_s3_object(attachment.s3_key)
+        delete_storage_object(settings.supabase_attachments_bucket, attachment.storage_path)
         await db.delete(attachment)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -141,26 +151,18 @@ async def confirm_attachment(
 
 
 async def create_presigned_download(attachment: Attachment) -> str:
-    client = _s3_client()
-    return client.generate_presigned_url(
-        "get_object",
-        Params={"Bucket": settings.s3_bucket, "Key": attachment.s3_key},
-        ExpiresIn=settings.presigned_url_expire_seconds,
+    bucket = _attachments_bucket()
+    result = bucket.create_signed_url(
+        attachment.storage_path,
+        settings.presigned_url_expire_seconds,
     )
-
-
-async def send_email(to_email: str, subject: str, body: str) -> None:
-    try:
-        _ses_client().send_email(
-            Source=settings.ses_from_email,
-            Destination={"ToAddresses": [to_email]},
-            Message={
-                "Subject": {"Data": subject, "Charset": "UTF-8"},
-                "Body": {"Text": {"Data": body, "Charset": "UTF-8"}},
-            },
+    signed_url = result.get("signedUrl") or result.get("signedURL")
+    if not signed_url:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Could not create download URL",
         )
-    except ClientError:
-        logger.exception("Failed to send email to %s", to_email)
+    return signed_url
 
 
 async def is_notification_enabled(
@@ -183,6 +185,8 @@ async def notify_user(
     subject: str,
     body: str,
 ) -> None:
+    from app.services.email import send_email
+
     if await is_notification_enabled(db, user.id, event_type):
         await send_email(user.email, subject, body)
 
@@ -203,3 +207,51 @@ async def ensure_default_notification_preferences(db: AsyncSession, user_id: uui
                     email_enabled=True,
                 )
             )
+
+
+def avatar_storage_path(user_id: uuid.UUID, extension: str) -> str:
+    return f"{user_id}{extension}"
+
+
+async def save_avatar(user_id: uuid.UUID, file: UploadFile) -> str:
+    content_type = file.content_type or ""
+    if content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Avatar must be a JPEG, PNG, WebP, or GIF image",
+        )
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
+    if len(data) > settings.max_avatar_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Image is too large (max 5MB)")
+
+    extension = EXTENSIONS[content_type]
+    storage_path = avatar_storage_path(user_id, extension)
+    bucket = _avatars_bucket()
+
+    for ext in EXTENSIONS.values():
+        old_path = avatar_storage_path(user_id, ext)
+        if old_path != storage_path:
+            try:
+                bucket.remove([old_path])
+            except Exception:
+                pass
+
+    bucket.upload(
+        storage_path,
+        data,
+        file_options={"content-type": content_type, "upsert": "true"},
+    )
+    return storage_path
+
+
+async def create_avatar_signed_url(storage_path: str) -> str | None:
+    bucket = _avatars_bucket()
+    try:
+        result = bucket.create_signed_url(storage_path, settings.presigned_url_expire_seconds)
+        return result.get("signedUrl") or result.get("signedURL")
+    except Exception:
+        logger.exception("Failed to create avatar signed URL for %s", storage_path)
+        return None

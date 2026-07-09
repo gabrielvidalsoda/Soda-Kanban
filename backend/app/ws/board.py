@@ -7,7 +7,7 @@ from collections import defaultdict
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 
-from app.auth.jwt import decode_access_token
+from app.auth.jwt import user_id_from_token
 from app.db.models import Board
 from app.db.session import async_session_factory
 from app.services.board_events import create_pubsub_redis
@@ -77,7 +77,7 @@ async def board_websocket(websocket: WebSocket, board_id: uuid.UUID) -> None:
     if not token:
         await websocket.close(code=4401)
         return
-    user_id = decode_access_token(token)
+    user_id = user_id_from_token(token)
     if not user_id:
         await websocket.close(code=4401)
         return

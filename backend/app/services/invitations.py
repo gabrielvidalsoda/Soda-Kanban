@@ -14,7 +14,7 @@ from app.db.models import (
     WorkspaceMember,
     WorkspaceRole,
 )
-from app.services.attachments import send_email
+from app.services.email import send_email
 
 logger = logging.getLogger(__name__)
 settings = get_settings()

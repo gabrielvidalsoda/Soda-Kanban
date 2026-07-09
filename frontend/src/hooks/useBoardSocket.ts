@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from "react";
 import type { BoardEvent } from "../types";
+import { getAccessToken } from "../lib/supabase";
 
 const WS_BASE = import.meta.env.VITE_WS_URL || `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}`;
 
@@ -9,14 +10,15 @@ export function useBoardSocket(boardId: string | undefined, onEvent: (event: Boa
 
   const connect = useCallback(() => {
     if (!boardId) return () => undefined;
-    const token = localStorage.getItem("access_token");
-    if (!token) return () => undefined;
 
     let ws: WebSocket | null = null;
     let retries = 0;
     let closed = false;
 
-    const open = () => {
+    const open = async () => {
+      const token = await getAccessToken();
+      if (!token) return;
+
       ws = new WebSocket(`${WS_BASE}/ws/boards/${boardId}?token=${token}`);
       ws.onmessage = (msg) => {
         try {
@@ -34,7 +36,7 @@ export function useBoardSocket(boardId: string | undefined, onEvent: (event: Boa
       };
     };
 
-    open();
+    void open();
     const ping = setInterval(() => ws?.readyState === WebSocket.OPEN && ws.send("ping"), 30000);
 
     return () => {

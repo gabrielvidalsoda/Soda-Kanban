@@ -1,7 +1,7 @@
-from pathlib import Path
+import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,7 +9,7 @@ from app.auth.dependencies import get_current_user
 from app.db.models import NotificationEventType, NotificationPreference, User
 from app.db.session import get_db
 from app.schemas import NotificationPreferenceRead, NotificationPreferenceUpdate, UserRead, UserUpdate
-from app.services.avatars import avatar_file_path, save_avatar
+from app.services.attachments import create_avatar_signed_url, save_avatar
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -40,30 +40,37 @@ async def upload_avatar(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    saved_path = await save_avatar(user.id, file)
-    user.avatar_url = saved_path
+    storage_path = await save_avatar(user.id, file)
+    user.avatar_url = storage_path
     await db.flush()
     await db.refresh(user)
     return user
 
 
 @router.get("/me/avatar")
-async def get_my_avatar(user: User = Depends(get_current_user)) -> FileResponse:
-    path = avatar_file_path(user.id)
-    if not path or not path.exists():
+async def get_my_avatar(user: User = Depends(get_current_user)) -> RedirectResponse:
+    if not user.avatar_url:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avatar not found")
-    return FileResponse(path, media_type=_media_type_for_path(path))
+    signed_url = await create_avatar_signed_url(user.avatar_url)
+    if not signed_url:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avatar not found")
+    return RedirectResponse(url=signed_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
-def _media_type_for_path(path: Path) -> str:
-    mapping = {
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".png": "image/png",
-        ".webp": "image/webp",
-        ".gif": "image/gif",
-    }
-    return mapping.get(path.suffix.lower(), "application/octet-stream")
+@router.get("/{user_id}/avatar")
+async def get_user_avatar(
+    user_id: uuid.UUID,
+    _: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> RedirectResponse:
+    result = await db.execute(select(User).where(User.id == user_id))
+    target = result.scalar_one_or_none()
+    if not target or not target.avatar_url:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avatar not found")
+    signed_url = await create_avatar_signed_url(target.avatar_url)
+    if not signed_url:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avatar not found")
+    return RedirectResponse(url=signed_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @router.get("/me/notification-preferences", response_model=list[NotificationPreferenceRead])

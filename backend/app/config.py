@@ -11,25 +11,28 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
 
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/soda_kanba"
+    database_url_direct: str | None = None
     redis_url: str = "redis://localhost:6379/0"
 
-    jwt_secret: str = "change-me-in-production"
-    jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 15
-    refresh_token_expire_days: int = 7
+    supabase_url: str = "http://localhost:54321"
+    supabase_service_role_key: str = "dev-service-role-key"
+    supabase_jwt_secret: str = "dev-jwt-secret"
 
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
-
-    aws_region: str = "us-east-1"
-    s3_bucket: str = "soda-kanba-attachments"
-    s3_endpoint_url: str | None = None
-    ses_from_email: str = "noreply@soda-kanba.local"
     frontend_url: str = "http://localhost:5173"
 
+    resend_api_key: str = ""
+    from_email: str = "noreply@localhost"
+
+    supabase_attachments_bucket: str = "attachments"
+    supabase_avatars_bucket: str = "avatars"
     presigned_url_expire_seconds: int = 900
-    avatar_upload_dir: str = "uploads/avatars"
     max_avatar_bytes: int = 5 * 1024 * 1024
     max_attachment_bytes: int = 10 * 1024 * 1024
+
+    @property
+    def migration_database_url(self) -> str:
+        return self.database_url_direct or self.database_url
 
 
 @lru_cache

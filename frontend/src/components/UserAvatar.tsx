@@ -39,7 +39,7 @@ export function UserAvatar({ user, size = "md", className = "" }: UserAvatarProp
 
     let cancelled = false;
     userApi
-      .fetchAvatar()
+      .fetchAvatar(user.id)
       .then((blob) => {
         if (cancelled) return;
         const url = URL.createObjectURL(blob);

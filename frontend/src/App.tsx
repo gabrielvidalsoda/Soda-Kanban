@@ -1,4 +1,5 @@
 import { Navigate, Outlet, Route, Routes } from "react-router-dom";
+import { usePageView } from "./hooks/usePageView";
 import { useAuthStore } from "./store/auth";
 import { LoginPage, RegisterPage, ResetPasswordPage } from "./pages/AuthPages";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -12,15 +13,33 @@ import { WorkspaceGuard } from "./components/WorkspaceGuard";
 
 function ProtectedRoute() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <p className="text-gray-500">Loading...</p>
+      </div>
+    );
+  }
   return isAuthenticated ? <Outlet /> : <Navigate to="/login" replace />;
 }
 
 function PublicRoute() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <p className="text-gray-500">Loading...</p>
+      </div>
+    );
+  }
   return isAuthenticated ? <Navigate to="/" replace /> : <Outlet />;
 }
 
 export default function App() {
+  usePageView();
+
   return (
     <Routes>
       <Route element={<PublicRoute />}>

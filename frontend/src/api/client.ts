@@ -9,11 +9,11 @@ import type {
   Invitation,
   NotificationPreference,
   PresignedUploadResponse,
-  TokenResponse,
   User,
   Workspace,
   WorkspaceMember,
 } from "../types";
+import { getAccessToken } from "../lib/supabase";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api/v1";
 
@@ -22,47 +22,17 @@ export const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("access_token");
+api.interceptors.request.use(async (config) => {
+  const token = await getAccessToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
 
-api.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const original = error.config;
-    if (error.response?.status === 401 && !original._retry) {
-      original._retry = true;
-      const refreshToken = localStorage.getItem("refresh_token");
-      if (refreshToken) {
-        try {
-          const { data } = await axios.post<TokenResponse>(`${API_BASE}/auth/refresh`, {
-            refresh_token: refreshToken,
-          });
-          localStorage.setItem("access_token", data.access_token);
-          localStorage.setItem("refresh_token", data.refresh_token);
-          original.headers.Authorization = `Bearer ${data.access_token}`;
-          return api(original);
-        } catch {
-          localStorage.clear();
-        }
-      }
-    }
-    return Promise.reject(error);
-  }
-);
-
 export const authApi = {
-  register: (payload: { email: string; password: string; name: string; invite_token?: string }) =>
-    api.post<TokenResponse>("/auth/register", payload),
-  login: (payload: { email: string; password: string }) =>
-    api.post<TokenResponse>("/auth/login", payload),
-  resetPassword: (payload: { email: string; password: string }) =>
-    api.post<TokenResponse>("/auth/reset-password", payload),
-  logout: () => api.post("/auth/logout", { refresh_token: localStorage.getItem("refresh_token") }),
+  completeRegistration: (payload: { name: string; invite_token?: string }) =>
+    api.post<User>("/auth/complete-registration", payload).then((r) => r.data),
 };
 
 export const userApi = {
@@ -76,7 +46,10 @@ export const userApi = {
       headers: { "Content-Type": undefined },
     }).then((r) => r.data);
   },
-  fetchAvatar: () => api.get<Blob>("/users/me/avatar", { responseType: "blob" }).then((r) => r.data),
+  fetchAvatar: (userId?: string) =>
+    api.get<Blob>(userId ? `/users/${userId}/avatar` : "/users/me/avatar", {
+      responseType: "blob",
+    }).then((r) => r.data),
   getNotificationPreferences: () =>
     api.get<NotificationPreference[]>("/users/me/notification-preferences"),
   updateNotificationPreferences: (preferences: NotificationPreference[]) =>

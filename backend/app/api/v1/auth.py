@@ -1,43 +1,77 @@
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.jwt import (
-    create_access_token,
-    create_refresh_token,
-    revoke_all_refresh_tokens,
-    revoke_refresh_token,
-    verify_refresh_token,
-)
-from app.auth.password import hash_password, verify_password
+from app.auth.dependencies import get_current_user, security
+from app.auth.jwt import decode_supabase_access_token
 from app.db.models import User, Workspace, WorkspaceMember, WorkspaceRole
 from app.db.session import get_db
-from app.schemas import (
-    LoginRequest,
-    PasswordResetRequest,
-    RefreshRequest,
-    RegisterRequest,
-    TokenResponse,
-    UserRead,
-)
+from app.schemas import CompleteRegistrationRequest, UserRead
 from app.services.attachments import ensure_default_notification_preferences
-from app.services.invitations import redeem_invitation, INVITE_ERROR_MESSAGES
+from app.services.invitations import INVITE_ERROR_MESSAGES, redeem_invitation
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
-    existing = await db.execute(select(User).where(User.email == payload.email))
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+async def _get_claims_from_credentials(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> dict:
+    if not credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    claims = decode_supabase_access_token(credentials.credentials)
+    if not claims:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    return claims
 
-    user = User(
-        email=payload.email,
-        password_hash=hash_password(payload.password),
-        name=payload.name,
-    )
+
+def _user_id_from_claims(claims: dict) -> uuid.UUID:
+    try:
+        return uuid.UUID(claims["sub"])
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token subject",
+        ) from exc
+
+
+@router.get("/me", response_model=UserRead)
+async def auth_me(user: User = Depends(get_current_user)) -> User:
+    return user
+
+
+@router.post("/complete-registration", response_model=UserRead)
+async def complete_registration(
+    payload: CompleteRegistrationRequest,
+    claims: dict = Depends(_get_claims_from_credentials),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    user_id = _user_id_from_claims(claims)
+    email = claims.get("email")
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token missing email claim",
+        )
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    existing = result.scalar_one_or_none()
+    if existing:
+        if payload.name and existing.name != payload.name:
+            existing.name = payload.name
+            await db.flush()
+        return UserRead.model_validate(existing)
+
+    email_taken = await db.execute(select(User).where(User.email == email, User.id != user_id))
+    if email_taken.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email already registered to another account",
+        )
+
+    user = User(id=user_id, email=email, name=payload.name)
     db.add(user)
     await db.flush()
     await ensure_default_notification_preferences(db, user.id)
@@ -66,69 +100,5 @@ async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db))
             detail="Registration requires a workspace invitation",
         )
 
-    access_token = create_access_token(user.id)
-    refresh_token = await create_refresh_token(db, user.id)
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        user=UserRead.model_validate(user),
-    )
-
-
-@router.post("/login", response_model=TokenResponse)
-async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
-    result = await db.execute(select(User).where(User.email == payload.email))
-    user = result.scalar_one_or_none()
-    if not user or not verify_password(payload.password, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-
-    access_token = create_access_token(user.id)
-    refresh_token = await create_refresh_token(db, user.id)
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        user=UserRead.model_validate(user),
-    )
-
-
-@router.post("/refresh", response_model=TokenResponse)
-async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
-    user = await verify_refresh_token(db, payload.refresh_token)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
-
-    await revoke_refresh_token(db, payload.refresh_token)
-    access_token = create_access_token(user.id)
-    new_refresh = await create_refresh_token(db, user.id)
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=new_refresh,
-        user=UserRead.model_validate(user),
-    )
-
-
-@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-async def logout(payload: RefreshRequest, db: AsyncSession = Depends(get_db)) -> None:
-    await revoke_refresh_token(db, payload.refresh_token)
-
-
-@router.post("/reset-password", response_model=TokenResponse)
-async def reset_password(payload: PasswordResetRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
-    result = await db.execute(select(User).where(User.email == payload.email))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No account found for this email",
-        )
-
-    user.password_hash = hash_password(payload.password)
-    await revoke_all_refresh_tokens(db, user.id)
-
-    access_token = create_access_token(user.id)
-    refresh_token = await create_refresh_token(db, user.id)
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        user=UserRead.model_validate(user),
-    )
+    await db.flush()
+    return UserRead.model_validate(user)

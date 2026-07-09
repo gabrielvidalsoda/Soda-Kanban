@@ -88,8 +88,8 @@ export function ProfilePage() {
     e.target.value = "";
   };
 
-  const handleLogout = () => {
-    clearAuth();
+  const handleLogout = async () => {
+    await clearAuth();
     navigate("/login");
   };
 

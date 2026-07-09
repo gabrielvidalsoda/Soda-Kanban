@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_user
+from app.config import get_settings
 from app.db.models import Attachment, User
 from app.db.session import get_db
 from app.schemas import AttachmentCreate, AttachmentRead, PresignedUploadResponse
@@ -12,9 +13,11 @@ from app.services.attachments import (
     confirm_attachment,
     create_presigned_download,
     create_presigned_upload,
-    delete_s3_object,
+    delete_storage_object,
 )
 from app.services.permissions import get_card_with_board, require_board_write
+
+settings = get_settings()
 
 router = APIRouter(prefix="/cards/{card_id}/attachments", tags=["attachments"])
 
@@ -65,7 +68,7 @@ async def get_upload_url(
     return PresignedUploadResponse(
         upload_url=upload_url,
         attachment_id=attachment.id,
-        s3_key=attachment.s3_key,
+        storage_path=attachment.storage_path,
     )
 
 
@@ -99,5 +102,5 @@ async def delete_attachment(
     attachment = result.scalar_one_or_none()
     if not attachment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found")
-    delete_s3_object(attachment.s3_key)
+    delete_storage_object(settings.supabase_attachments_bucket, attachment.storage_path)
     await db.delete(attachment)

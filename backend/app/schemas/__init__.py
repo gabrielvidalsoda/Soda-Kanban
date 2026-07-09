@@ -30,32 +30,9 @@ class UserUpdate(BaseModel):
         return v.strip() if v is not None else v
 
 
-class RegisterRequest(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=8)
+class CompleteRegistrationRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     invite_token: str | None = None
-
-
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
-
-
-class PasswordResetRequest(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=8)
-
-
-class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-    user: UserRead
-
-
-class RefreshRequest(BaseModel):
-    refresh_token: str
 
 
 class WorkspaceCreate(BaseModel):
@@ -278,7 +255,7 @@ class AttachmentRead(BaseModel):
 class PresignedUploadResponse(BaseModel):
     upload_url: str
     attachment_id: uuid.UUID
-    s3_key: str
+    storage_path: str
 
 
 class InvitationCreate(BaseModel):

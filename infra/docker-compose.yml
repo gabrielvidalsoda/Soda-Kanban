@@ -34,11 +34,13 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/soda_kanba
       REDIS_URL: redis://redis:6379/0
-      JWT_SECRET: dev-secret-change-in-production
+      SUPABASE_URL: ${SUPABASE_URL:-http://host.docker.internal:54321}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-dev-service-role-key}
+      SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-dev-jwt-secret}
       CORS_ORIGINS: '["http://localhost:5173"]'
       FRONTEND_URL: http://localhost:5173
-      S3_BUCKET: soda-kanba-attachments
-      AWS_REGION: us-east-1
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      FROM_EMAIL: ${FROM_EMAIL:-noreply@localhost}
     depends_on:
       postgres:
         condition: service_healthy
